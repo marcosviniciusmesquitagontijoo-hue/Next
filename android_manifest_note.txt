@@ -1,0 +1,8 @@
+Configure no AndroidManifest.xml dentro de <manifest>:
+<uses-permission android:name="android.permission.INTERNET" />
+
+Dentro de <application>, para permitir HTTP (não recomendado para credenciais):
+android:usesCleartextTraffic="true"
+
+Nome do app:
+android:label="Next"
