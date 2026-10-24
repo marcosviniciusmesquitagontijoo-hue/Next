@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Baixar codigo
         uses: actions/checkout@v4
@@ -31,6 +32,57 @@ jobs:
 
       - name: Criar estrutura Android
         run: flutter create . --platforms=android
+
+      - name: Configurar AndroidManifest
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text(encoding="utf-8")
+
+          permission = '<uses-permission android:name="android.permission.INTERNET" />'
+          if "android.permission.INTERNET" not in s:
+              s, n = re.subn(
+                  r'(<manifest\b[^>]*>)',
+                  r'\1\n    ' + permission,
+                  s,
+                  count=1
+              )
+              if n != 1:
+                  raise SystemExit("Não foi possível localizar a tag manifest.")
+
+          match = re.search(r'<application\b[^>]*>', s, re.DOTALL)
+          if not match:
+              raise SystemExit("Não foi possível localizar a tag application.")
+
+          tag = match.group(0)
+
+          if re.search(r'\bandroid:label\s*=', tag):
+              tag = re.sub(
+                  r'\bandroid:label\s*=\s*"[^"]*"',
+                  'android:label="Next"',
+                  tag,
+                  count=1
+              )
+          else:
+              tag = tag[:-1] + ' android:label="Next">'
+
+          if re.search(r'\bandroid:usesCleartextTraffic\s*=', tag):
+              tag = re.sub(
+                  r'\bandroid:usesCleartextTraffic\s*=\s*"[^"]*"',
+                  'android:usesCleartextTraffic="true"',
+                  tag,
+                  count=1
+              )
+          else:
+              tag = tag[:-1] + ' android:usesCleartextTraffic="true">'
+
+          s = s[:match.start()] + tag + s[match.end():]
+          p.write_text(s, encoding="utf-8")
+          print("AndroidManifest configurado com sucesso.")
+          PY
 
       - name: Instalar dependencias
         run: flutter pub get
