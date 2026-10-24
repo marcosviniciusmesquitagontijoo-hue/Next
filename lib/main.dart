@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-const String serverBase = 'http://agenciacinepoa.top';
+const String serverBase = 'http://ftspl26.com';
 
 const Color bg = Color(0xFF100D18);
 const Color panel = Color(0xFF211A2C);
