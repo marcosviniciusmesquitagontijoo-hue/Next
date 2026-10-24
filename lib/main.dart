@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-const String serverBase = 'http://ftspl26.com';
 
 const Color bg = Color(0xFF100D18);
 const Color panel = Color(0xFF211A2C);
@@ -50,11 +49,42 @@ class NextApp extends StatelessWidget {
   }
 }
 
+String normalizeServerUrl(String input) {
+  var value = input.trim();
+  if (value.isEmpty) {
+    throw const FormatException('Informe a URL do servidor.');
+  }
+  if (!value.startsWith('http://') && !value.startsWith('https://')) {
+    value = 'http://$value';
+  }
+
+  final uri = Uri.tryParse(value);
+  if (uri == null || uri.host.isEmpty ||
+      (uri.scheme != 'http' && uri.scheme != 'https')) {
+    throw const FormatException(
+      'URL inválida. Informe, por exemplo, http://servidor:porta.',
+    );
+  }
+
+  var path = uri.path;
+  if (path.endsWith('/player_api.php')) {
+    path = path.substring(0, path.length - '/player_api.php'.length);
+  }
+  path = path.replaceFirst(RegExp(r'/+$'), '');
+  return uri.replace(path: path, query: null, fragment: null).toString()
+      .replaceFirst(RegExp(r'/+$'), '');
+}
+
 class XtreamService {
+  final String serverBase;
   final String username;
   final String password;
 
-  const XtreamService(this.username, this.password);
+  XtreamService({
+    required String serverUrl,
+    required this.username,
+    required this.password,
+  }) : serverBase = normalizeServerUrl(serverUrl);
 
   Uri endpoint(String action, [Map<String, String> extra = const {}]) {
     return Uri.parse('$serverBase/player_api.php').replace(
@@ -125,6 +155,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final TextEditingController server = TextEditingController();
   final TextEditingController user = TextEditingController();
   final TextEditingController pass = TextEditingController();
 
@@ -133,9 +164,9 @@ class _LoginPageState extends State<LoginPage> {
   String? error;
 
   Future<void> submit() async {
-    if (user.text.trim().isEmpty || pass.text.isEmpty) {
+    if (server.text.trim().isEmpty || user.text.trim().isEmpty || pass.text.isEmpty) {
       setState(() {
-        error = 'Informe usuário e senha.';
+        error = 'Informe URL do servidor, usuário e senha.';
       });
       return;
     }
@@ -147,8 +178,9 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final service = XtreamService(
-        user.text.trim(),
-        pass.text,
+        serverUrl: server.text,
+        username: user.text.trim(),
+        password: pass.text,
       );
 
       final account = await service.login();
@@ -166,7 +198,12 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString().replaceFirst('Exception: ', '');
+          final message = e.toString().replaceFirst('Exception: ', '');
+          error = message.contains('SocketException') ||
+                  message.contains('Failed host lookup') ||
+                  message.contains('SocketFailed')
+              ? 'Não foi possível localizar o domínio do servidor (DNS). Confira a URL e tente outra conexão.'
+              : message;
         });
       }
     } finally {
@@ -180,6 +217,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    server.dispose();
     user.dispose();
     pass.dispose();
     super.dispose();
@@ -229,9 +267,23 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 34),
                   TextField(
+                    controller: server,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.link),
+                      labelText: 'URL do servidor',
+                      hintText: 'http://servidor:porta',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
                     controller: user,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
+                    enableSuggestions: false,
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.person_outline),
                       labelText: 'Usuário',
@@ -299,7 +351,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Servidor configurado automaticamente',
+                    'Informe a URL, o usuário e a senha fornecidos pelo serviço.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white38,
@@ -549,9 +601,12 @@ class _HomePageState extends State<HomePage> {
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(14),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: MediaQuery.sizeOf(context).width >= 900
+                        ? 5
+                        : MediaQuery.sizeOf(context).width >= 600
+                            ? 4
+                            : 2,
                     childAspectRatio: 0.72,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
